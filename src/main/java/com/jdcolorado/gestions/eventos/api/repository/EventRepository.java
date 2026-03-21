@@ -1,4 +1,4 @@
-package com.jdcolorado.gestions.eventos.api;
+package com.jdcolorado.gestions.eventos.api.repository;
 
 import com.jdcolorado.gestions.eventos.api.domain.Event;
 import org.springframework.data.jpa.repository.JpaRepository;

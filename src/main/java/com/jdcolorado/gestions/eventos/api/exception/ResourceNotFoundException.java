@@ -1,7 +1,8 @@
 package com.jdcolorado.gestions.eventos.api.exception;
 
-public class ResourceNotFoundExecption extends RuntimeException {
-    public ResourceNotFoundExecption(String message) {
+public class ResourceNotFoundException extends RuntimeException {
+
+    public ResourceNotFoundException(String message) {
         super(message);
     }
 }

@@ -1,14 +1,12 @@
 package com.jdcolorado.gestions.eventos.api.dto;
 
-import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 
 @Data
-@AllArgsConstructor
-@NoArgsConstructor
+@JsonPropertyOrder({"id", "name", "date", "location"})
 public class EventResponseDto {
     private Long id;
     private String name;
