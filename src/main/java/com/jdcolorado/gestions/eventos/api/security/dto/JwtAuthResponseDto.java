@@ -1,4 +1,4 @@
-package com.jdcolorado.gestions.eventos.api.dto;
+package com.jdcolorado.gestions.eventos.api.security.dto;
 
 import lombok.Data;
 

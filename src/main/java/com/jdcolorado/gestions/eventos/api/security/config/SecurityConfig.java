@@ -1,11 +1,11 @@
-package com.jdcolorado.gestions.eventos.api.security;
+package com.jdcolorado.gestions.eventos.api.security.config;
 
 import com.jdcolorado.gestions.eventos.api.security.jwt.JwtAuthEntryPoint;
 import com.jdcolorado.gestions.eventos.api.security.jwt.JwtAuthenticationFilter;
+import com.jdcolorado.gestions.eventos.api.security.util.CustomAccessDeniedHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -38,9 +38,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth ->
                         auth
                                 .requestMatchers("/api/v1/auth/**").permitAll()
+                                .requestMatchers("/h2-console/**").permitAll()
                                 .anyRequest().authenticated()
-                );
+                ).headers(AbstractHttpConfigurer::disable);
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.exceptionHandling(exception -> exception
+                        .accessDeniedHandler(new CustomAccessDeniedHandler())
+        );
         return http.build();
     }
 

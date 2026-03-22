@@ -1,5 +1,6 @@
 package com.jdcolorado.gestions.eventos.api.security.jwt;
 
+import io.jsonwebtoken.security.SignatureException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,17 +28,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String token = getJtwFromRequest(request);
 
-        if(StringUtils.hasText(token) && jwtGenerator.validateToken(token) && SecurityContextHolder.getContext().getAuthentication() ==  null){
-            String username = jwtGenerator.getUsernameFromJwt(token);
-            UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+        try {
+            if(StringUtils.hasText(token) && jwtGenerator.validateToken(token) && SecurityContextHolder.getContext().getAuthentication() ==  null){
+                String username = jwtGenerator.getUsernameFromJwt(token);
+                UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 
-            UsernamePasswordAuthenticationToken authenticationToken =  new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                UsernamePasswordAuthenticationToken authenticationToken =  new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
 
-            authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+                authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                SecurityContextHolder.getContext().setAuthentication(authenticationToken);
 
+            }
+            filterChain.doFilter(request, response);
+        }catch (SignatureException ex) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
+            response.getWriter().write("{\"status\":401,\"error\":\"Unauthorized\",\"message\":\"Token JWT expirado o manipulado\"}");
         }
-        filterChain.doFilter(request, response);
+
     }
 
     private String getJtwFromRequest(HttpServletRequest request){

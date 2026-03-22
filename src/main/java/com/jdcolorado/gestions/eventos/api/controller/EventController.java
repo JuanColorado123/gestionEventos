@@ -7,6 +7,9 @@ import com.jdcolorado.gestions.eventos.api.mapper.EventMapper;
 import com.jdcolorado.gestions.eventos.api.service.IEventService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -27,15 +30,17 @@ public class EventController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
-    public ResponseEntity<List<EventResponseDto>> getAllEvents(){
-        List<Event> events = service.findAll();
+    public ResponseEntity<Page<EventResponseDto>> getAllEvents(
+            @RequestParam(required = false) String name,
+            @PageableDefault(page = 0, size = 10, sort = "name")Pageable pageable){
 
-        if(events.isEmpty()){
+        Page<EventResponseDto> eventResponseDtoPage = service.findAll(name,pageable);
+
+        if(eventResponseDtoPage.isEmpty()){
             return ResponseEntity.noContent().build();
         }
 
-        List<EventResponseDto> eventResponseDtoList = mapper.toEventResponseDtoList(events);
-        return ResponseEntity.ok(eventResponseDtoList);
+        return ResponseEntity.ok(eventResponseDtoPage);
     }
 
     @GetMapping("/{id}")
@@ -49,8 +54,7 @@ public class EventController {
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<EventResponseDto> createEvent(@Valid @RequestBody EventRequestDto eventRequestDto){
-        Event eventToSave = mapper.toEntity(eventRequestDto);
-        Event eventSaved = service.save(eventToSave);
+        Event eventSaved = service.save(eventRequestDto);
         EventResponseDto eventResponseDto = mapper.toResponseDto(eventSaved);
 
         return ResponseEntity.ok(eventResponseDto);
@@ -60,11 +64,9 @@ public class EventController {
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<EventResponseDto> updateEvent(@PathVariable Long id, @Valid @RequestBody EventRequestDto eventRequestDto){
 
-        Event eventToUpdated = service.findById(id);
+        Event eventToUpdated = service.update(id, eventRequestDto);
         mapper.updatedEventFromDto(eventRequestDto, eventToUpdated);
-        Event updateEvent = service.save(eventToUpdated);
-
-        return ResponseEntity.ok(mapper.toResponseDto(updateEvent));
+        return ResponseEntity.ok(mapper.toResponseDto(eventToUpdated));
     }
 
     @DeleteMapping("/{id}")

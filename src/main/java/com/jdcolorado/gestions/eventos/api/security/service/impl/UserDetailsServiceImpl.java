@@ -1,4 +1,4 @@
-package com.jdcolorado.gestions.eventos.api.service.impl;
+package com.jdcolorado.gestions.eventos.api.security.service.impl;
 
 import com.jdcolorado.gestions.eventos.api.domain.Role;
 import com.jdcolorado.gestions.eventos.api.domain.User;

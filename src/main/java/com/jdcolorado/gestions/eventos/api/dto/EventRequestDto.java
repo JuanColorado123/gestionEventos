@@ -1,11 +1,14 @@
 package com.jdcolorado.gestions.eventos.api.dto;
 
+import com.jdcolorado.gestions.eventos.api.domain.Speaker;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Set;
 
 @Data
 public class EventRequestDto {
@@ -18,4 +21,9 @@ public class EventRequestDto {
 
     @NotBlank(message = "El campo no puede estar vacio")
     private String location;
+
+    @NotNull(message = "El campo categoryId no puede estar vacio")
+    private Long categoryId;
+
+    private Set<Long> speakersIds = new HashSet<>();
 }
