@@ -12,6 +12,8 @@ import com.jdcolorado.gestions.eventos.api.service.CategoryService;
 import com.jdcolorado.gestions.eventos.api.service.IEventService;
 import com.jdcolorado.gestions.eventos.api.service.SpeakerService;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -27,7 +29,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class EventServiceImpl implements IEventService {
 
-    private final EventRepository repository;
+    private static final Logger logger = LoggerFactory.getLogger(EventServiceImpl.class);
+    private final EventRepository eventRepository;
     private final EventMapper eventMapper;
     private final CategoryService categoryService;
     private final SpeakerService speakerService;
@@ -35,85 +38,119 @@ public class EventServiceImpl implements IEventService {
     @Override
     @Transactional(readOnly = true)
     public Page<EventResponseDto> findAll(String name, Pageable pageable) {
-
+        logger.debug("Buscando eventos en el servicio (name: '{}', pageable: {}).", name, pageable);
         Page<Event> eventsPage;
 
-        if(name != null && !name.trim().isEmpty()){
-            eventsPage = repository.findByNameContainingIgnoreCase(name, pageable);
-        }else{
-            eventsPage = repository.findAll(pageable);
-
+        if(name!=null && !name.trim().isEmpty()){
+            eventsPage = eventRepository.findByNameContainingIgnoreCase(name, pageable);
+            logger.debug("Filtrando eventos por nombre: '{}'. Encontrados: {}.", name, eventsPage.getTotalElements());
+        }else {
+            eventsPage = eventRepository.findAll(pageable);
+            logger.debug("Buscando todos los eventos sin filtro. Encontrados: {}.", eventsPage.getTotalElements());
         }
 
-        List<EventResponseDto> eventResponseDtos = eventsPage
-                .getContent()
-                .stream()
-                .map(eventMapper::toResponseDto).toList();
+        List<EventResponseDto> dtos = eventsPage.getContent().stream()
+                .map(eventMapper::toResponseDto)
+                .toList();
 
+        logger.info("Encontrados {} eventos paginados y mapeados a DTOs.", eventsPage.getTotalElements());
+        return new PageImpl<>(dtos, pageable, eventsPage.getTotalElements());
+    }
 
-        return new PageImpl<>(eventResponseDtos, pageable, eventsPage.getTotalElements());
+    @Override
+    @Transactional
+    public Event save(EventRequestDto requestDto) {
+        logger.debug("Procesando save de evento en el servicio para: {}", requestDto.getName());
+        Event event = eventMapper.toEntity(requestDto);
 
+        logger.debug("Asignando categoría con ID: {}", requestDto.getCategoryId());
+        Category category = categoryService.findById(requestDto.getCategoryId());
+        event.setCategory(category);
+
+        if(requestDto.getSpeakersIds() !=null && !requestDto.getSpeakersIds().isEmpty()){
+            logger.debug("Asignando {} oradores al evento.", requestDto.getSpeakersIds().size());
+            Set<Speaker> speakers = requestDto.getSpeakersIds().stream()
+                    .map(speakerService::findById)
+                    .collect(Collectors.toSet());
+            speakers.forEach(event::addAttendSpeaker);
+        } else {
+            logger.debug("No se especificaron oradores para el evento.");
+        }
+
+        Event savedEvent = eventRepository.save(event);
+        logger.info("Evento '{}' guardado en DB con ID: {}.", savedEvent.getName(), savedEvent.getId());
+        return savedEvent;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Event findById(Long id) {
-        return repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Event ID no se encontro: " + id));
+        logger.debug("Buscando evento en el repositorio por ID: {}.", id);
+        return eventRepository.findById(id).orElseThrow(
+                () -> {
+                    logger.warn("Evento con ID {} no encontrado en el servicio, lanzando ResourceNotFoundException.", id);
+                    return new ResourceNotFoundException("Evento no encontrado con id: " + id);
+                }
+        );
     }
 
     @Override
-    @Transactional()
-    public Event save(EventRequestDto eventRequestDto) {
+    @Transactional
+    public Event update(Long id, EventRequestDto requestDto) {
+        logger.debug("Iniciando actualización de evento con ID {} en el servicio.", id);
+        Event existingEvent = eventRepository.findById(id)
+                .orElseThrow(
+                        () -> {
+                            logger.warn("Intento de actualizar evento con ID {} que no existe, lanzando ResourceNotFoundException.", id);
+                            return new ResourceNotFoundException("Evento no encontrado con ID: " + id);
+                        }
+                );
+        logger.debug("Evento existente con ID {} encontrado. Mapeando DTO a entidad.", id);
+        eventMapper.updatedEventFromDto(requestDto, existingEvent);
 
-        Event event = eventMapper.toEntity(eventRequestDto);
-
-        Category category = categoryService.findById(eventRequestDto.getCategoryId());
-        event.setCategory(category);
-
-        if (eventRequestDto.getSpeakersIds() != null && !eventRequestDto.getSpeakersIds().isEmpty()) {
-            Set<Speaker> speakers = eventRequestDto.getSpeakersIds().stream().map(speakerService::findById).collect(Collectors.toSet());
-            speakers.forEach(event::addAttendSpeaker);
-        }
-
-        return repository.save(event);
-    }
-
-    @Override
-    @Transactional()
-    public Event update(Long id, EventRequestDto eventRequestDto) {
-        Event existingEvent = repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("No se encontro el evento con ID: " + id));
-
-        eventMapper.updatedEventFromDto(eventRequestDto, existingEvent);
-
-        if(!existingEvent.getCategory().getId().equals(eventRequestDto.getCategoryId())){
-            Category category = categoryService.findById(eventRequestDto.getCategoryId());
+        if(!existingEvent.getCategory().getId().equals(requestDto.getCategoryId())){
+            logger.debug("Cambiando categoría del evento de ID {} a ID {}.", existingEvent.getCategory().getId(), requestDto.getCategoryId());
+            Category category = categoryService.findById(requestDto.getCategoryId());
             existingEvent.setCategory(category);
         }
 
         Set<Speaker> updatedSpeakers;
-        if(eventRequestDto.getSpeakersIds() != null && !eventRequestDto.getSpeakersIds().isEmpty()){
-            updatedSpeakers = eventRequestDto.getSpeakersIds().stream().map(speakerService::findById).collect(Collectors.toSet());
-        }else {
+        if(requestDto.getSpeakersIds() !=null && !requestDto.getSpeakersIds().isEmpty()){
+            logger.debug("Procesando {} oradores para la actualización del evento.", requestDto.getSpeakersIds().size());
+            updatedSpeakers = requestDto.getSpeakersIds().stream()
+                    .map(speakerService::findById)
+                    .collect(Collectors.toSet());
+        } else {
             updatedSpeakers = new HashSet<>();
+            logger.debug("No se especificaron oradores para la actualización, se eliminarán los existentes si los hay.");
         }
-        new HashSet<>(existingEvent.getSpeakers()).forEach(currentSpeaker -> {
-            if(!updatedSpeakers.contains(currentSpeaker)){
-                existingEvent.removeSpeaker(currentSpeaker);
-            }
-        });
+
+        new HashSet<>(existingEvent.getSpeakers())
+                .forEach(currentSpeaker -> {
+                    if(!updatedSpeakers.contains(currentSpeaker)){
+                        existingEvent.removeSpeaker(currentSpeaker);
+                        logger.debug("Eliminando orador '{}' (ID: {}) del evento.", currentSpeaker.getName(), currentSpeaker.getId());
+                    }
+                });
 
         updatedSpeakers.forEach(newSpeaker -> {
             if(!existingEvent.getSpeakers().contains(newSpeaker)){
-                existingEvent.addAttendSpeaker(newSpeaker );
+                existingEvent.addAttendSpeaker(newSpeaker);
+                logger.debug("Añadiendo orador '{}' (ID: {}) al evento.", newSpeaker.getName(), newSpeaker.getId());
             }
         });
-        return repository.save(existingEvent);
+
+        Event updatedEvent = eventRepository.save(existingEvent);
+        logger.info("Evento con ID {} actualizado en la base de datos.", id);
+        return updatedEvent;
     }
 
     @Override
-    @Transactional()
+    @Transactional
     public void deleteById(Long id) {
-        Event event = this.findById(id);
-        repository.delete(event);
+        logger.debug("Solicitud de eliminación para evento con ID {} en el servicio.", id);
+        Event eventToDelete = this.findById(id); // findById ya lanzará ResourceNotFoundException si no existe
+        eventRepository.delete(eventToDelete);
+        logger.info("Evento con ID {} eliminado de la base de datos.", id);
     }
 }
